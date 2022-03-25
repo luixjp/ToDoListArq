@@ -1,45 +1,49 @@
 package br.edu.ifsp.scl.sdm.pa2.todolistarq.controller
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.AsyncTask
 import androidx.room.Room
 import br.edu.ifsp.scl.sdm.pa2.todolistarq.model.database.ToDoListArqDatabase
 import br.edu.ifsp.scl.sdm.pa2.todolistarq.model.entity.Tarefa
+import br.edu.ifsp.scl.sdm.pa2.todolistarq.service.DBManagerStartedService
 import br.edu.ifsp.scl.sdm.pa2.todolistarq.view.ListaTarefasFragment
 
 class ListaTarefasController(private val listaTarefaFragment : ListaTarefasFragment) {
-    private val database: ToDoListArqDatabase
-    init {
-        database = Room.databaseBuilder(
-            listaTarefaFragment.requireContext(),
-            ToDoListArqDatabase::class.java,
-            ToDoListArqDatabase.Constantes.DB_NAME
-        ).build()
-    }
 
-    fun buscarTarefas() {
-        object : AsyncTask<Unit, Unit, List<Tarefa>>(){
-            override fun doInBackground(vararg params: Unit?): List<Tarefa> {
-                return database.getTarefaDao().recuperarTarefas()
-            }
-
-            override fun onPostExecute(result: List<Tarefa>?) {
-                super.onPostExecute(result)
+    /* BroadcastReceiver que recebe o BUSCAR TAREFA do serviço */
+    private val receiveDBManagerBuscarTarefas: BroadcastReceiver by lazy {
+        object: BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val result = intent?.getParcelableArrayListExtra<Tarefa>(DBManagerStartedService.EXTRA_DBM) as ArrayList<Tarefa>
                 val listaTarefas = mutableListOf<Tarefa>()
                 result?.forEach{ tarefa ->
-                    listaTarefas.add(tarefa)
+                    listaTarefas.add(tarefa as Tarefa)
                 }
                 listaTarefaFragment.atualizarListaTarefas(listaTarefas)
-            }
 
-        }.execute()
+                listaTarefaFragment.context?.applicationContext?.unregisterReceiver(receiveDBManagerBuscarTarefas)
+            }
+        }
+    }
+
+
+    fun buscarTarefas() {
+
+        listaTarefaFragment.context?.applicationContext?.registerReceiver(receiveDBManagerBuscarTarefas, IntentFilter(DBManagerStartedService.ACTION_RECEIVE_BUSCAR_TAREFAS))
+
+        val intent = Intent(listaTarefaFragment.context, DBManagerStartedService::class.java)
+        intent.putExtra(DBManagerStartedService.OPERATION, 1)
+        listaTarefaFragment.context?.applicationContext?.startService(intent)
     }
 
     fun removerTarefa(tarefa: Tarefa) {
-        object : AsyncTask<Unit, Unit, Unit>() {
-            override fun doInBackground(vararg params: Unit?): Unit {
-                return database.getTarefaDao().removerTarefa(tarefa)
-            }
 
-        }.execute()
+        val intent = Intent(listaTarefaFragment.context, DBManagerStartedService::class.java)
+        intent.putExtra(DBManagerStartedService.OPERATION, 2)
+        intent.putExtra(DBManagerStartedService.TAREFA, tarefa)
+        listaTarefaFragment.context?.applicationContext?.startService(intent)
     }
 }
